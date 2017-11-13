@@ -45,7 +45,8 @@ namespace StatisticsProgram
                     new Label { Text = "Mediana:" + CalculateMediana(doubleList)},
                     new Label { Text = data },
                     new Label {Text = "Classes:" + classNumber},
-                    new Label {Text = "Amplitude:" + ClassAmplitudeCalculator(classNumber, doubleList[doubleList.Count-1],doubleList[0])}
+                    new Label {Text = "Amplitude:" + ClassAmplitudeCalculator(classNumber, doubleList[doubleList.Count-1],doubleList[0])},
+                    new Label {Text = "Ponto médio:" + ClassMidPointCalculator(5,10)}
                 }
             };
         }
@@ -155,9 +156,11 @@ namespace StatisticsProgram
         }
 
 
+        private float ClassMidPointCalculator(float upperLimit, int lowerLimit)
+        {
+            var midPoint = (upperLimit + lowerLimit) / 2;
 
-
-
-
+            return midPoint;
+        }
     }
 }
