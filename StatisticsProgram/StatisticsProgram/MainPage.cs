@@ -15,7 +15,7 @@ namespace StatisticsProgram
         {
 
             var assembly = typeof(App).GetTypeInfo().Assembly;
-            Stream stream = assembly.GetManifestResourceStream("StatisticsProgram.teste.csv");
+            Stream stream = assembly.GetManifestResourceStream("StatisticsProgram.mediadashorasefetivamentetrabalhadas.csv");
 
             string[] test;
             using (var reader = new StreamReader(stream))
@@ -23,16 +23,24 @@ namespace StatisticsProgram
                 test = reader.ReadToEnd().Split(new[] {"\r\n"}, StringSplitOptions.RemoveEmptyEntries);
             }
 
-            var untreatyears = test[0];
-            var data = test[1];
+            string data = test[1];
+
+            /*List<string> forRemove = new List<string> {"","Ate 1/2 salario minimo", "Mais de 1/2 a 1 salario minimo", "Mais de 1 a 2 salarios minimos", "Mais de 2 a 3 salarios minimos", "Mais de 3 a 5 salarios minimos",
+
+                "Brasil", "OPCAO", "1992", "1993", "1995", "1996", "1997", "1998", "1999", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009" };*/
+
+            List<string> forRemove = new List<string> {"Total das areas"};
 
             var originalList = data.Split(new[] {";"}, StringSplitOptions.None).ToList();
-            originalList.Remove("Brasil");
+            originalList.RemoveAll(t => forRemove.Contains(t));
 
             var doubleList = ConvertToListDouble(originalList);
-            var classNumber = ClassNumberCalculator(doubleList.Count());
             doubleList.Sort();
 
+            var classNumber = ClassNumberCalculator(doubleList.Count());
+            var amplitude = ClassAmplitudeCalculator(classNumber, doubleList[doubleList.Count - 1], doubleList[0]);
+
+            var listClass = CreateClasses(amplitude, classNumber, doubleList);
 
             Content = new StackLayout
             {
@@ -43,9 +51,9 @@ namespace StatisticsProgram
                     new Label { Text = "Média:" + CalculateMedia(doubleList)},
                     new Label { Text = "Moda:" + CalculateModa(doubleList)},
                     new Label { Text = "Mediana:" + CalculateMediana(doubleList)},
-                    new Label { Text = data },
+                    new Label { Text = originalList.ToString() },
                     new Label {Text = "Classes:" + classNumber},
-                    new Label {Text = "Amplitude:" + ClassAmplitudeCalculator(classNumber, doubleList[doubleList.Count-1],doubleList[0])},
+                    new Label {Text = "Amplitude:" + amplitude},
                     new Label {Text = "Ponto médio:" + ClassMidPointCalculator(5,10)}
                 }
             };
@@ -148,11 +156,11 @@ namespace StatisticsProgram
         }
 
 
-        private int ClassAmplitudeCalculator(int classNumber, double maxValue, double minValue)
+        private double ClassAmplitudeCalculator(int classNumber, double maxValue, double minValue)
         {
             var classAmplitude = (maxValue - minValue) / classNumber;
 
-            return (int)Math.Round(classAmplitude);
+            return Math.Round(classAmplitude,3);
         }
 
 
@@ -162,5 +170,24 @@ namespace StatisticsProgram
 
             return midPoint;
         }
+
+        private List<StatisticClass> CreateClasses(double classAmplitude,int classNumber, List<double> allElements)
+        {
+            var list = new List<StatisticClass>();
+            var classVariable = allElements[0];
+
+            for(var i=0;i<classNumber;i++)
+            {
+                var myClass = new StatisticClass() { Begin = classVariable, End = classVariable += classAmplitude };
+                myClass.DefineName();
+                classVariable += classAmplitude;
+                list.Add(myClass);
+            }
+
+
+            return list;
+        }
     }
+
+
 }
