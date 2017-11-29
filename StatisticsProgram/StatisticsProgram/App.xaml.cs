@@ -13,9 +13,9 @@ namespace StatisticsProgram
         {
             InitializeComponent();
 
-            MainPage = new StatisticsProgram.MainPage();
+            MainPage = new NavigationPage(new StatisticsProgram.MainPage());
         }
-
+        
         protected override void OnStart()
         {
             // Handle when your app starts

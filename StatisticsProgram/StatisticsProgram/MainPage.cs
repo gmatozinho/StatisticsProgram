@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-
+using Steema.TeeChart;
 using Xamarin.Forms;
 
 namespace StatisticsProgram
@@ -15,7 +14,7 @@ namespace StatisticsProgram
         {
 
             var assembly = typeof(App).GetTypeInfo().Assembly;
-            Stream stream = assembly.GetManifestResourceStream("StatisticsProgram.mediadashorasefetivamentetrabalhadas.csv");
+            var stream = assembly.GetManifestResourceStream("StatisticsProgram.mediadashorasefetivamentetrabalhadas.csv");
 
             string[] test;
             using (var reader = new StreamReader(stream))
@@ -23,13 +22,9 @@ namespace StatisticsProgram
                 test = reader.ReadToEnd().Split(new[] {"\r\n"}, StringSplitOptions.RemoveEmptyEntries);
             }
 
-            string data = test[1];
-
-            /*List<string> forRemove = new List<string> {"","Ate 1/2 salario minimo", "Mais de 1/2 a 1 salario minimo", "Mais de 1 a 2 salarios minimos", "Mais de 2 a 3 salarios minimos", "Mais de 3 a 5 salarios minimos",
-
-                "Brasil", "OPCAO", "1992", "1993", "1995", "1996", "1997", "1998", "1999", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009" };*/
-
-            List<string> forRemove = new List<string> {"Total das areas"};
+            var data = test[1];
+            
+            var forRemove = new List<string> {"Total das areas"};
 
             var originalList = data.Split(new[] {";"}, StringSplitOptions.None).ToList();
             originalList.RemoveAll(t => forRemove.Contains(t));
@@ -41,24 +36,32 @@ namespace StatisticsProgram
             var amplitude = ClassAmplitudeCalculator(classNumber, doubleList[doubleList.Count - 1], doubleList[0]);
 
             var listClass = CreateClasses(amplitude, classNumber, doubleList);
+            var average = CalculateAverage(listClass);
+            var variance = CalculateSampleVariance(listClass,average);
 
-            Content = new StackLayout
+            PrepareForBoxSplot(doubleList);
+
+            var button = new Button(){Text = "Mostrar Informações do Box Splot"};
+
+            button.Clicked += Button_Clicked;
+
+            Content =  new StackLayout
             {
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center,
                 Children = {
-                    new Label { Text = "Valores Estatisticos:" },
-                    new Label { Text = "Média:" + CalculateMedia(doubleList)},
-                    new Label { Text = "Moda:" + CalculateModa(doubleList)},
-                    new Label { Text = "Mediana:" + CalculateMediana(doubleList)},
-                    new Label { Text = originalList.ToString() },
+                    new Label { Text = "Valores Estatisticos:\n" },
+                    new Label { Text = "Média: " + average},
+                    new Label { Text = "Moda:" + CalculateCzuberMode(listClass,amplitude)},
+                    new Label { Text = "Mediana:" + CalculateMedian(listClass,amplitude)},
+                    new Label {Text = "Variância:" + variance },
+                    new Label {Text = "Desvio Padrão:" + CalculateSampleStandardDeviation(variance )},
                     new Label {Text = "Classes:" + classNumber},
-                    new Label {Text = "Amplitude:" + amplitude},
-                    new Label {Text = "Ponto médio:" + ClassMidPointCalculator(5,10)}
+                    new Label {Text = "Amplitude:" + amplitude +"\n"},
+                    button
                 }
             };
         }
-
 
         private static List<double> ConvertToListDouble(List<string> values)
         {
@@ -66,38 +69,285 @@ namespace StatisticsProgram
 
             foreach (var value in values)
             {
-                doubleList.Add(double.Parse(value.Replace(",", ".")));
+                switch (Device.RuntimePlatform)
+                {
+                    case Device.Android:
+                        doubleList.Add(double.Parse(value));
+                        break;
+                    case Device.Windows:
+                        doubleList.Add(double.Parse(value.Replace(",", ".")));
+                        break;
+
+                }
+                
             }
 
             return doubleList;
         }
 
-        private static string CalculateMediana(List<double> values)
-        {             
+        private static double CalculateAverage(IEnumerable<StatisticClass> values)
+        {
 
-            string mediana;
+            double total = 0;
+            double sumFrequencyXMidPoint = 0;
+
+            foreach (var value in values)
+            {
+                sumFrequencyXMidPoint += value.AbsolutFrequency * value.MidPoint;
+                total += value.AbsolutFrequency;
+            }
+
+            return Math.Round(sumFrequencyXMidPoint / total, 3);
+        }
+
+        private static double CalculateCzuberMode(List<StatisticClass> values, double amplitude)
+        {
+
+            var listAux = values.Select(value => value.AbsolutFrequency).ToList();
+            listAux.Sort();
+            var mode = listAux.Last();
+            var modeClass = values.Select(modeC => modeC).First(modeC => modeC.AbsolutFrequency == mode);
+
+            var modeClassPos = values.FindIndex(a => a == modeClass);
+            var lowerLimitMiddleClass = modeClass.Begin;
+            var absoluteFrequencyMiddleClass = modeClass.AbsolutFrequency;
+
+            var absoluteFrequencyPreviousMiddleClass = PreviousFrequencyMode(values, modeClassPos);
+            var absoluteFrequencyAfterMiddleClass = AfterFrequencyMode(values, modeClassPos);
+            
+            var czuberMode = lowerLimitMiddleClass +
+                             // ReSharper disable once PossibleLossOfFraction
+                             (amplitude*((absoluteFrequencyMiddleClass - absoluteFrequencyPreviousMiddleClass) /
+                                        ((2 * absoluteFrequencyMiddleClass) -
+                                         (absoluteFrequencyPreviousMiddleClass + absoluteFrequencyAfterMiddleClass))));
+
+            return czuberMode;
+
+        }
+
+
+        private static int PreviousFrequencyMode(List<StatisticClass> values, int modeClassPos)
+        {
+            try
+            {
+                return values[modeClassPos - 1].AbsolutFrequency;
+            }
+            catch (Exception e)
+            {
+                return  0;
+            }
+        }
+
+        private static int AfterFrequencyMode(List<StatisticClass> values, int modeClassPos)
+        {
+            try
+            {
+                return values[modeClassPos + 1].AbsolutFrequency;
+            }
+            catch (Exception e)
+            {
+                return 0;
+            }
+        }
+
+        private static double CalculateMedian(List<StatisticClass> values, double amplitude)
+        {
+            double medianPos = values.Count/2;
+
+            var medianClass = new StatisticClass();
+
+            foreach (var value in values)
+            {
+                if (!(medianPos < value.AccumulatedFrequency)) continue;
+                medianClass = value;
+                break;
+            }
+
+            var medianClassPos = values.FindIndex(a => a == medianClass);
+            var previousMedianClassFrequency = PreviousFrequencyMedian(values, medianClassPos);
+            var divisionTop = medianPos - previousMedianClassFrequency;
+            var lowerLimitMiddleClass = medianClass.Begin;
+            var absoluteFrequencyMiddleClass = medianClass.AbsolutFrequency;
+
+            var median = lowerLimitMiddleClass + ((divisionTop / absoluteFrequencyMiddleClass) * amplitude);
+
+            return median;
+        }
+
+        private static int PreviousFrequencyMedian(List<StatisticClass > values, int medianClassPos)
+        {
+            try
+            {
+                return values[medianClassPos - 1].AbsolutFrequency;
+            }
+            catch (Exception e)
+            {
+                return 0;
+            }
+
+        }
+
+        private static double CalculateSampleVariance(List<StatisticClass> values, double average)
+        {
+            var sum = values.Sum(value => Math.Pow(value.MidPoint - average, 2));
+
+            var total = (values.Last().AccumulatedFrequency - 1);
+            var variance = sum / total ;
+
+            return Math.Round(variance,3);
+        }
+
+        private static double CalculateSampleStandardDeviation(double variance)
+        {
+            return Math.Sqrt(variance);
+        }
+
+        private static int ClassNumberCalculator(int qtdNumbers)
+        {
+            var classNumber = (int)Math.Round(Math.Sqrt(qtdNumbers));
+
+            return classNumber;
+        }
+
+
+        private static double ClassAmplitudeCalculator(int classNumber, double maxValue, double minValue)
+        {
+            var classAmplitude = (maxValue - minValue) / classNumber;
+
+            return Math.Round(classAmplitude,3);
+        }
+
+
+        private static double ClassMidPointCalculator(double upperLimit, double lowerLimit)
+        {
+            var midPoint = (upperLimit + lowerLimit) / 2;
+
+            return midPoint;
+        }
+
+        private static List<StatisticClass> CreateClasses(double classAmplitude,int classNumber, List<double> allElements)
+        {
+            var list = new List<StatisticClass>();
+            var classVariable = Math.Round(allElements[0],3);
+            var accumulatedFrequency = 0;
+
+            for(var i=0;i<classNumber;i++)
+            {
+                var myClass = new StatisticClass() { Begin = Math.Round(classVariable,3), End = Math.Round(classVariable += classAmplitude,3) };
+                myClass.DefineName();
+                foreach (var item in allElements)
+                {
+                    if (item >= myClass.Begin && item < myClass.End)
+                    {
+                        myClass.Elements.Add(item);
+                    }
+                }
+                myClass.AbsolutFrequency = myClass.Elements.Count();
+                myClass.AccumulatedFrequency = accumulatedFrequency += myClass.AbsolutFrequency;
+                myClass.MidPoint = ClassMidPointCalculator(myClass.End, myClass.Begin);
+                list.Add(myClass);
+            }
+
+
+            return list;
+        }
+
+
+        private void BoxPlot()
+        {
+
+            
+        }
+
+
+        private void Button_Clicked(object sender, EventArgs e)
+        {
+            var stack = new StackLayout()
+            {
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center,
+                Children =
+                {
+                    new Label { Text = "Valores BoxPlot:\n" },
+                    new Label { Text = "Q2: " + mediana },
+                    new Label { Text = "Q1: " + q1 },
+                    new Label { Text = "Q3: " + q3 },
+                    new Label { Text = "Amplitude interquantil: " + AIQ },
+                    new Label { Text = "Valor atipico inferior: " + xinf },
+                    new Label { Text = "Valor atipico superior: " + xsup },
+                    new Label { Text = "Valor Minimo:" + valorMin },
+                    new Label { Text = "Valor Maximo:" + valorMax},
+                    
+                }
+            };
+
+            Navigation.PushAsync(new ContentPage() { Content = stack });
+        }
+
+        private double mediana;
+        private double q1;
+        private double q3;
+        private double AIQ;
+        private double xinf;
+        private double xsup;
+        private double valorMin;
+        private double valorMax;
+
+        private void PrepareForBoxSplot(List<double> values)
+        {
+            mediana = OldCalculateMediana(values);
+            var result = Q1AndQ2(values,mediana);
+            q1 = result[0];
+            q3 = result[1];
+            AIQ = q3 - q1;
+            xinf = Math.Round(q1 - (1.5 * AIQ),3);
+            xsup = Math.Round(q3 + (1.5 * AIQ),3);
+            valorMin = values[0];
+            valorMax = values.Last();
+        }
+
+
+        private double[] Q1AndQ2(List<double> values,double mediana)
+        {
+            var listQ1 = (from data in values where data <= mediana select data).ToList();
+            var listQ2 = (from data in values where data > mediana select data).ToList();
+
+            var q1 = OldCalculateMediana(listQ1);
+            var q3 = OldCalculateMediana(listQ2);
+
+
+            return new[]{q1, q3};
+        }
+
+
+        private static double OldCalculateMediana(IReadOnlyList<double> values)
+        {
+
+            double mediana;
 
             if (values.Count % 2 == 0)
             {
                 var medMe = values.Count / 2;
                 var medMa = (values.Count + 2) / 2;
-                                
-                mediana = " Elemento = " + ((values[medMa-1] + values[medMe-1])/2);
+
+                mediana = ((values[medMa - 1] + values[medMe - 1]) / 2);
 
             }
             else
             {
-                mediana = "Elemento = " + values[((values.Count + 1) / 2)-1];
+                mediana = values[((values.Count + 1) / 2) - 1];
             }
 
             return mediana;
         }
 
-        private static double CalculateMedia(List<double> values)
+
+
+        private static double OldCalculateMedia(IReadOnlyCollection<double> values)
         {
             double soma = 0;
 
-            foreach(var value in values)
+            foreach (var value in values)
             {
                 soma += value;
             }
@@ -106,10 +356,10 @@ namespace StatisticsProgram
             return soma / values.Count;
         }
 
-        private static string CalculateModa(List<double> values)
+        private static string OldCalculateModa(IReadOnlyCollection<double> values)
         {
-                        string moda;
-            
+            string moda;
+
             var groups = values.GroupBy(i => i).Select(i => new { Number = i.Key, Count = i.Count() }).OrderByDescending(i => i.Count);
 
             var dict = new Dictionary<double, int>();
@@ -146,48 +396,6 @@ namespace StatisticsProgram
 
             return moda;
         }
-
-
-        private int ClassNumberCalculator(int qtdNumbers)
-        {
-            var classNumber = (int)Math.Round(Math.Sqrt(qtdNumbers));
-
-            return classNumber;
-        }
-
-
-        private double ClassAmplitudeCalculator(int classNumber, double maxValue, double minValue)
-        {
-            var classAmplitude = (maxValue - minValue) / classNumber;
-
-            return Math.Round(classAmplitude,3);
-        }
-
-
-        private float ClassMidPointCalculator(float upperLimit, int lowerLimit)
-        {
-            var midPoint = (upperLimit + lowerLimit) / 2;
-
-            return midPoint;
-        }
-
-        private List<StatisticClass> CreateClasses(double classAmplitude,int classNumber, List<double> allElements)
-        {
-            var list = new List<StatisticClass>();
-            var classVariable = allElements[0];
-
-            for(var i=0;i<classNumber;i++)
-            {
-                var myClass = new StatisticClass() { Begin = classVariable, End = classVariable += classAmplitude };
-                myClass.DefineName();
-                classVariable += classAmplitude;
-                list.Add(myClass);
-            }
-
-
-            return list;
-        }
     }
-
 
 }
