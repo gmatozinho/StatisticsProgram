@@ -132,7 +132,7 @@ namespace StatisticsProgram
             {
                 return values[modeClassPos - 1].AbsolutFrequency;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return  0;
             }
@@ -144,7 +144,7 @@ namespace StatisticsProgram
             {
                 return values[modeClassPos + 1].AbsolutFrequency;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return 0;
             }
@@ -269,7 +269,7 @@ namespace StatisticsProgram
                 Children =
                 {
                     new Label { Text = "Valores BoxPlot:\n" },
-                    new Label { Text = "Q2: " + mediana },
+                    new Label { Text = "Mediana: " + mediana },
                     new Label { Text = "Q1: " + q1 },
                     new Label { Text = "Q3: " + q3 },
                     new Label { Text = "Amplitude interquantil: " + AIQ },
